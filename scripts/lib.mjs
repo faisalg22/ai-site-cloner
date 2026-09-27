@@ -2,7 +2,7 @@
 import { chromium } from "playwright";
 import { PNG } from "pngjs";
 import { spawnSync } from "node:child_process";
-import { mkdirSync, writeFileSync, readFileSync, renameSync } from "node:fs";
+import { mkdirSync, writeFileSync, readFileSync, renameSync, existsSync } from "node:fs";
 import { createHash } from "node:crypto";
 import { dirname, join } from "node:path";
 
@@ -185,6 +185,17 @@ async function enableResponseCache(context) {
 // of setup friction that makes a template feel broken — the error Playwright
 // throws names the fix, so apply it automatically and retry once.
 async function launchInstallingIfMissing() {
+  // A sandboxed environment may pre-install Chromium at a fixed path (and
+  // block the CDN this package's pinned revision would otherwise fetch from).
+  // Prefer that build over triggering a download.
+  const preinstalled = process.env.PLAYWRIGHT_CHROMIUM_PATH || "/opt/pw-browsers/chromium";
+  if (existsSync(preinstalled)) {
+    try {
+      return await chromium.launch({ headless: true, executablePath: preinstalled });
+    } catch {
+      /* fall through to the default resolution/install path below */
+    }
+  }
   try {
     return await chromium.launch({ headless: true });
   } catch (err) {
